@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Survival Incremental</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <h1>Survival Incremental</h1>
+
+  <!-- Resources the player has gathered and can currently spend -->
+  <section id="resources">
+    <h2>Resources</h2>
+    <p>Wood: <span id="wood">0</span></p>
+    <p>Food: <span id="food">0</span></p>
+  </section>
+
+  <!-- Survival stats: hunger and health, shown as a number plus a bar -->
+  <section id="survival-stats">
+    <h2>Survival</h2>
+
+    <p>Hunger: <span id="hunger-value">100</span> / 10</p>
+    <div class="bar-outer">
+      <div id="hunger-bar" class="bar-fill hunger-fill"></div>
+    </div>
+
+    <p>Health: <span id="health-value">100</span> / 100</p>
+    <div class="bar-outer">
+      <div id="health-bar" class="bar-fill health-fill"></div>
+    </div>
+  </section>
+
+  <!-- Player actions -->
+  <section id="actions">
+    <h2>Actions</h2>
+    <button id="gather-wood-btn">Gather Wood</button>
+    <button id="gather-food-btn">Gather Food</button>
+    <button id="eat-food-btn">Eat Food (-5 food)</button>
+  </section>
+
+  <!-- Death screen overlay, hidden until the player's health reaches 0 -->
+  <div id="death-screen" class="hidden">
+    <div id="death-screen-content">
+      <h2>You Have Died</h2>
+      <p>Total wood gathered: <span id="death-wood">0</span></p>
+      <p>Total food gathered: <span id="death-food">0</span></p>
+      <p>Run duration: <span id="death-time">0</span> seconds</p>
+      <button id="new-run-btn">Start New Run</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
