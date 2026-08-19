@@ -53,6 +53,12 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Same treatment for the debug shelter dropdown when paused */
+select:disabled {
+  background-color: #eee;
+  cursor: not-allowed;
+}
+
 /* ---------- Hunger / health bars ---------- */
 
 .bar-outer {
@@ -78,9 +84,10 @@ button:disabled {
   background-color: #c0392b;
 }
 
-/* ---------- Death screen ---------- */
+/* ---------- Overlays (death screen, pause screen) ---------- */
 
-#death-screen {
+/* Shared full-page backdrop, used by both #death-screen and #pause-screen */
+.overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -93,11 +100,11 @@ button:disabled {
 }
 
 /* Toggled on/off from game.js instead of using inline styles */
-#death-screen.hidden {
+.overlay.hidden {
   display: none;
 }
 
-#death-screen-content {
+.overlay-content {
   background-color: white;
   border-radius: 8px;
   padding: 24px 32px;

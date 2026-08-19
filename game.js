@@ -30,6 +30,12 @@ let gameState = {
   // systems. For now they're driven by the debug controls further down.
   shelterLevel: 0,  // 0 = none, 1 = simple, 2 = good
   temperature: 1,   // 0 = cold, 1 = comfortable
+
+  // Pause state. pauseStartTime/totalPausedMs let the run duration shown
+  // on the pause/death screens exclude time spent paused.
+  isPaused: false,
+  pauseStartTime: null,
+  totalPausedMs: 0,
 };
 
 // The interval timer for hunger/health decay lives outside gameState
@@ -40,7 +46,7 @@ let survivalTimerId = null;
 
 // How often (ms) the survival tick runs, and how much it moves each stat.
 const TICK_INTERVAL_MS = 1000;
-const HUNGER_LOSS_PER_TICK = 1;
+const HUNGER_LOSS_PER_TICK = 0.1;
 const HEALTH_LOSS_PER_TICK = 1;
 
 // Cost/benefit of eating food.
@@ -151,15 +157,69 @@ function triggerDeath() {
 }
 
 // ----------------------------------------------------------------------
+// pauseGame: stops the survival tick without ending the run, and shows
+// the pause popup. No-op if already dead or already paused.
+// ----------------------------------------------------------------------
+function pauseGame() {
+  if (gameState.isDead || gameState.isPaused) return;
+
+  gameState.isPaused = true;
+  gameState.pauseStartTime = Date.now();
+
+  clearInterval(survivalTimerId);
+  survivalTimerId = null;
+
+  updateButtonStates();
+  showPauseScreen();
+}
+
+// ----------------------------------------------------------------------
+// resumeGame: the reverse of pauseGame. Adds however long this pause
+// lasted onto the running total (so it can be excluded from run
+// duration elsewhere), then restarts the tick.
+// ----------------------------------------------------------------------
+function resumeGame() {
+  if (!gameState.isPaused) return;
+
+  gameState.totalPausedMs += Date.now() - gameState.pauseStartTime;
+  gameState.pauseStartTime = null;
+  gameState.isPaused = false;
+
+  document.getElementById('pause-screen').classList.add('hidden');
+
+  updateButtonStates();
+  startSurvivalTimer();
+}
+
+// ----------------------------------------------------------------------
+// getRunDurationSeconds: how long the current run has actually been
+// played, in seconds - total elapsed time minus any time spent paused
+// (including whatever pause is currently in progress, if any). Shared
+// by the pause popup and the death screen so both agree on "duration".
+// ----------------------------------------------------------------------
+function getRunDurationSeconds() {
+  const currentPauseMs = gameState.isPaused ? Date.now() - gameState.pauseStartTime : 0;
+  const pausedMs = gameState.totalPausedMs + currentPauseMs;
+  return Math.floor((Date.now() - gameState.runStartTime - pausedMs) / 1000);
+}
+
+// ----------------------------------------------------------------------
+// showPauseScreen: fills in the pause popup's duration readout and
+// makes it visible by removing the "hidden" class.
+// ----------------------------------------------------------------------
+function showPauseScreen() {
+  document.getElementById('pause-time').textContent = getRunDurationSeconds();
+  document.getElementById('pause-screen').classList.remove('hidden');
+}
+
+// ----------------------------------------------------------------------
 // showDeathScreen: fills in the death screen's summary stats and makes
 // it visible by removing the "hidden" class (see style.css).
 // ----------------------------------------------------------------------
 function showDeathScreen() {
-  const runDurationSeconds = Math.floor((Date.now() - gameState.runStartTime) / 1000);
-
   document.getElementById('death-wood').textContent = gameState.totalWoodGathered;
   document.getElementById('death-food').textContent = gameState.totalFoodGathered;
-  document.getElementById('death-time').textContent = runDurationSeconds;
+  document.getElementById('death-time').textContent = getRunDurationSeconds();
 
   document.getElementById('death-screen').classList.remove('hidden');
 }
@@ -173,17 +233,38 @@ function updateButtonStates() {
   const gatherWoodBtn = document.getElementById('gather-wood-btn');
   const gatherFoodBtn = document.getElementById('gather-food-btn');
   const eatFoodBtn = document.getElementById('eat-food-btn');
+  const pauseBtn = document.getElementById('pause-btn');
+  const shelterSelect = document.getElementById('debug-shelter-select');
+  const tempToggleBtn = document.getElementById('debug-temp-toggle');
 
   // Once dead, every action button is disabled - the run is over.
   if (gameState.isDead) {
     gatherWoodBtn.disabled = true;
     gatherFoodBtn.disabled = true;
     eatFoodBtn.disabled = true;
+    pauseBtn.disabled = true;
+    shelterSelect.disabled = true;
+    tempToggleBtn.disabled = true;
+    return;
+  }
+
+  // While paused, everything disables too (including the debug controls) -
+  // the whole page is effectively frozen until Resume is clicked.
+  if (gameState.isPaused) {
+    gatherWoodBtn.disabled = true;
+    gatherFoodBtn.disabled = true;
+    eatFoodBtn.disabled = true;
+    pauseBtn.disabled = true;
+    shelterSelect.disabled = true;
+    tempToggleBtn.disabled = true;
     return;
   }
 
   gatherWoodBtn.disabled = false;
   gatherFoodBtn.disabled = false;
+  pauseBtn.disabled = false;
+  shelterSelect.disabled = false;
+  tempToggleBtn.disabled = false;
 
   // Eating is only allowed if the player can afford it AND actually
   // needs it (no point enabling the button if hunger is already full).
@@ -239,9 +320,13 @@ function startNewRun() {
     isDead: false,
     shelterLevel: 0,
     temperature: 1,
+    isPaused: false,
+    pauseStartTime: null,
+    totalPausedMs: 0,
   };
 
   document.getElementById('death-screen').classList.add('hidden');
+  document.getElementById('pause-screen').classList.add('hidden');
 
   render();
   startSurvivalTimer();
@@ -267,6 +352,8 @@ function init() {
   document.getElementById('gather-food-btn').addEventListener('click', gatherFood);
   document.getElementById('eat-food-btn').addEventListener('click', eatFood);
   document.getElementById('new-run-btn').addEventListener('click', startNewRun);
+  document.getElementById('pause-btn').addEventListener('click', pauseGame);
+  document.getElementById('resume-btn').addEventListener('click', resumeGame);
 
   // Debug controls: let shelter/temperature be changed by hand for now,
   // until a real shelter-building/temperature system sets them instead.

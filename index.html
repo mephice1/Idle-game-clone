@@ -37,6 +37,7 @@
     <button id="gather-wood-btn">Gather Wood</button>
     <button id="gather-food-btn">Gather Food</button>
     <button id="eat-food-btn">Eat Food (-5 food)</button>
+    <button id="pause-btn">Pause</button>
   </section>
 
   <!-- Temporary debug controls for testing hunger modifiers, until real
@@ -55,13 +56,22 @@
   </section>
 
   <!-- Death screen overlay, hidden until the player's health reaches 0 -->
-  <div id="death-screen" class="hidden">
-    <div id="death-screen-content">
+  <div id="death-screen" class="overlay hidden">
+    <div class="overlay-content">
       <h2>You Have Died</h2>
       <p>Total wood gathered: <span id="death-wood">0</span></p>
       <p>Total food gathered: <span id="death-food">0</span></p>
       <p>Run duration: <span id="death-time">0</span> seconds</p>
       <button id="new-run-btn">Start New Run</button>
+    </div>
+  </div>
+
+  <!-- Pause screen overlay, hidden until the player clicks Pause -->
+  <div id="pause-screen" class="overlay hidden">
+    <div class="overlay-content">
+      <h2>Game Paused</h2>
+      <p>Run duration so far: <span id="pause-time">0</span> seconds</p>
+      <button id="resume-btn">Resume</button>
     </div>
   </div>
 
