@@ -1,3 +1,7 @@
+// Hunger's max value lives here, not repeated as a magic number everywhere
+// else, so changing the scale only ever means changing this one line.
+const MAX_HUNGER = 10;
+
 // ======================================================================
 // gameState holds every piece of data that describes the current run.
 // Keeping it all in one object makes it easy to reset everything at once
@@ -8,7 +12,7 @@ let gameState = {
   food: 0,
 
   // Survival stats. Both start full and are clamped between 0 and their maximum values.
-  hunger: 10,
+  hunger: MAX_HUNGER,
   health: 100,
 
   // Lifetime counters for the death screen summary. These only ever go
@@ -21,6 +25,11 @@ let gameState = {
 
   // True once health has hit 0. Used to stop timers and lock out actions.
   isDead: false,
+
+  // Modifiers that will eventually be set by real shelter/temperature
+  // systems. For now they're driven by the debug controls further down.
+  shelterLevel: 0,  // 0 = none, 1 = simple, 2 = good
+  temperature: 1,   // 0 = cold, 1 = comfortable
 };
 
 // The interval timer for hunger/health decay lives outside gameState
@@ -36,7 +45,26 @@ const HEALTH_LOSS_PER_TICK = 1;
 
 // Cost/benefit of eating food.
 const EAT_FOOD_COST = 5;
-const EAT_FOOD_HUNGER_RESTORE = 30;
+const EAT_FOOD_HUNGER_RESTORE = 2;
+
+// Multipliers applied to HUNGER_LOSS_PER_TICK based on the player's
+// current shelter and temperature. Below 1.0 = slower hunger loss,
+// above 1.0 = faster. Indexed/keyed by the matching gameState value.
+const SHELTER_HUNGER_MULTIPLIERS = [1.0, 0.6, 0.3]; // [none, simple, good]
+const TEMPERATURE_HUNGER_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortable }
+
+// ----------------------------------------------------------------------
+// getHungerLossRate: works out how fast hunger should currently drain by
+// combining the base rate with the active shelter/temperature multipliers.
+// Called fresh every tick so it always reflects the latest gameState -
+// once a real shelter/temperature system sets these fields, this function
+// needs no changes at all.
+// ----------------------------------------------------------------------
+function getHungerLossRate() {
+  const shelterMultiplier = SHELTER_HUNGER_MULTIPLIERS[gameState.shelterLevel];
+  const temperatureMultiplier = TEMPERATURE_HUNGER_MULTIPLIERS[gameState.temperature];
+  return HUNGER_LOSS_PER_TICK * shelterMultiplier * temperatureMultiplier;
+}
 
 // ----------------------------------------------------------------------
 // gatherWood: simple click action. Adds 1 wood to the player's current
@@ -72,14 +100,14 @@ function gatherFood() {
 // ----------------------------------------------------------------------
 function eatFood() {
   const canAfford = gameState.food >= EAT_FOOD_COST;
-  const needsHunger = gameState.hunger < 10;
+  const needsHunger = gameState.hunger < MAX_HUNGER;
 
   if (gameState.isDead || !canAfford || !needsHunger) return;
 
   gameState.food -= EAT_FOOD_COST;
 
-  // Math.min caps hunger at 100 even if the restore amount would push it over.
-  gameState.hunger = Math.min(10, gameState.hunger + EAT_FOOD_HUNGER_RESTORE);
+  // Math.min caps hunger at its max even if the restore amount would push it over.
+  gameState.hunger = Math.min(MAX_HUNGER, gameState.hunger + EAT_FOOD_HUNGER_RESTORE);
 
   render();
 }
@@ -93,7 +121,7 @@ function eatFood() {
 // ----------------------------------------------------------------------
 function tickSurvival() {
   if (gameState.hunger > 0) {
-    gameState.hunger = Math.max(0, gameState.hunger - HUNGER_LOSS_PER_TICK);
+    gameState.hunger = Math.max(0, gameState.hunger - getHungerLossRate());
   } else {
     gameState.health = Math.max(0, gameState.health - HEALTH_LOSS_PER_TICK);
   }
@@ -160,7 +188,7 @@ function updateButtonStates() {
   // Eating is only allowed if the player can afford it AND actually
   // needs it (no point enabling the button if hunger is already full).
   const canAfford = gameState.food >= EAT_FOOD_COST;
-  const needsHunger = gameState.hunger < 10;
+  const needsHunger = gameState.hunger < MAX_HUNGER;
   eatFoodBtn.disabled = !(canAfford && needsHunger);
 }
 
@@ -173,12 +201,23 @@ function render() {
   document.getElementById('wood').textContent = gameState.wood;
   document.getElementById('food').textContent = gameState.food;
 
-  document.getElementById('hunger-value').textContent = gameState.hunger;
+  // Hunger can now hold fractional values internally (shelter/temperature
+  // multipliers rarely divide evenly), so it's rounded just for display.
+  const roundedHunger = Math.round(gameState.hunger);
+  document.getElementById('hunger-value').textContent = roundedHunger;
   document.getElementById('health-value').textContent = gameState.health;
 
-  // Bars are just divs whose width is set to match the stat's percentage.
-  document.getElementById('hunger-bar').style.width = gameState.hunger + '%';
+  // Bars are just divs whose width is set to match the stat's percentage
+  // of its max value.
+  document.getElementById('hunger-bar').style.width = (gameState.hunger / MAX_HUNGER * 100) + '%';
   document.getElementById('health-bar').style.width = gameState.health + '%';
+
+  // Debug readout: shows the effective hunger loss rate so the
+  // shelter/temperature modifiers are actually visible while testing.
+  document.getElementById('debug-hunger-rate').textContent = getHungerLossRate().toFixed(2);
+  document.getElementById('debug-temp-toggle').textContent =
+    'Temperature: ' + (gameState.temperature === 1 ? 'Comfortable' : 'Cold');
+  document.getElementById('debug-shelter-select').value = gameState.shelterLevel;
 
   updateButtonStates();
 }
@@ -192,12 +231,14 @@ function startNewRun() {
   gameState = {
     wood: 0,
     food: 0,
-    hunger: 10,
+    hunger: MAX_HUNGER,
     health: 100,
     totalWoodGathered: 0,
     totalFoodGathered: 0,
     runStartTime: Date.now(),
     isDead: false,
+    shelterLevel: 0,
+    temperature: 1,
   };
 
   document.getElementById('death-screen').classList.add('hidden');
@@ -226,6 +267,17 @@ function init() {
   document.getElementById('gather-food-btn').addEventListener('click', gatherFood);
   document.getElementById('eat-food-btn').addEventListener('click', eatFood);
   document.getElementById('new-run-btn').addEventListener('click', startNewRun);
+
+  // Debug controls: let shelter/temperature be changed by hand for now,
+  // until a real shelter-building/temperature system sets them instead.
+  document.getElementById('debug-shelter-select').addEventListener('change', (event) => {
+    gameState.shelterLevel = Number(event.target.value);
+    render();
+  });
+  document.getElementById('debug-temp-toggle').addEventListener('click', () => {
+    gameState.temperature = gameState.temperature === 1 ? 0 : 1;
+    render();
+  });
 
   render();
   startSurvivalTimer();

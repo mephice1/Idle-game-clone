@@ -20,7 +20,7 @@
   <section id="survival-stats">
     <h2>Survival</h2>
 
-    <p>Hunger: <span id="hunger-value">100</span> / 10</p>
+    <p>Hunger: <span id="hunger-value">10</span> / 10</p>
     <div class="bar-outer">
       <div id="hunger-bar" class="bar-fill hunger-fill"></div>
     </div>
@@ -37,6 +37,21 @@
     <button id="gather-wood-btn">Gather Wood</button>
     <button id="gather-food-btn">Gather Food</button>
     <button id="eat-food-btn">Eat Food (-5 food)</button>
+  </section>
+
+  <!-- Temporary debug controls for testing hunger modifiers, until real
+       shelter-building and temperature systems exist to drive these. -->
+  <section id="debug">
+    <h2>Debug (temporary - for testing hunger modifiers)</h2>
+    <label>Shelter:
+      <select id="debug-shelter-select">
+        <option value="0">0 - None</option>
+        <option value="1">1 - Simple</option>
+        <option value="2">2 - Good</option>
+      </select>
+    </label>
+    <button id="debug-temp-toggle">Temperature: Comfortable</button>
+    <p>Hunger loss rate: <span id="debug-hunger-rate">1.00</span> / sec</p>
   </section>
 
   <!-- Death screen overlay, hidden until the player's health reaches 0 -->

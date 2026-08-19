@@ -24,6 +24,12 @@ section h2 {
   font-size: 1.1em;
 }
 
+/* Dashed border marks this as a temporary testing area, not real gameplay UI */
+#debug {
+  border-style: dashed;
+  background-color: #f7f7f7;
+}
+
 /* ---------- Buttons ---------- */
 
 button {
