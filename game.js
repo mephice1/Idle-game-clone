@@ -46,7 +46,7 @@ let survivalTimerId = null;
 
 // How often (ms) the survival tick runs, and how much it moves each stat.
 const TICK_INTERVAL_MS = 1000;
-const HUNGER_LOSS_PER_TICK = 0.1;
+const HUNGER_LOSS_PER_TICK = 0.2;
 const HEALTH_LOSS_PER_TICK = 1;
 
 // Cost/benefit of eating food.
