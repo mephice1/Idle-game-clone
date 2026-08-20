@@ -77,42 +77,62 @@ let gameState = {
   totalPausedMs: 0,
 };
 
-// The interval timer for energy/health decay lives outside gameState
+// The interval timer for the health-decay tick lives outside gameState
 // because it's not "game data" - it's a handle we need to be able to
 // cancel with clearInterval(). Storing it in gameState would just mean
 // accidentally saving/serializing something that isn't real state.
 let survivalTimerId = null;
 
-// How often (ms) the survival tick runs, and how much it moves each stat.
+// How often (ms) the tick runs. Energy no longer drains passively over
+// time - it's only ever spent by actions (see spendEnergy below) - so
+// this interval now exists purely to drain health once energy hits 0,
+// and to keep the run-duration display live.
 const TICK_INTERVAL_MS = 1000;
-const ENERGY_LOSS_PER_TICK = 0.2;
 const HEALTH_LOSS_PER_TICK = 1;
 
 // Cost/benefit of eating food.
 const EAT_FOOD_COST = 5;
 const EAT_FOOD_ENERGY_RESTORE = 2;
 
-// Multipliers applied to ENERGY_LOSS_PER_TICK based on the player's
-// current shelter and temperature. Below 1.0 = slower energy loss,
-// above 1.0 = faster. Indexed/keyed by the matching gameState value.
-const SHELTER_ENERGY_MULTIPLIERS = [1.0, 0.6, 0.3]; // [none, simple, good]
-const TEMPERATURE_ENERGY_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortable }
+// Base energy cost of gathering/building actions, before shelter/temperature
+// multipliers. Eating is deliberately the one exception - it's the
+// player's way back up, so it only ever restores energy, never costs it.
+const GATHER_WOOD_ENERGY_COST = 0.3;
+const GATHER_FOOD_ENERGY_COST = 0.2;
+const SHELTER_BUILD_ENERGY_COST = 1;
+
+// Multipliers applied to action energy costs based on the player's
+// current shelter and temperature. Below 1.0 = cheaper actions,
+// above 1.0 = more expensive. Indexed/keyed by the matching gameState value.
+const SHELTER_COST_MULTIPLIERS = [1.0, 0.6, 0.3]; // [none, simple, good]
+const TEMPERATURE_COST_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortable }
 
 // Cost of the real "Build Simple Shelter" action (as opposed to the
 // debug shelter dropdown), once unlocked via the wood-10 milestone.
 const SHELTER_BUILD_WOOD_COST = 20;
 
 // ----------------------------------------------------------------------
-// getEnergyLossRate: works out how fast energy should currently drain by
-// combining the base rate with the active shelter/temperature multipliers.
-// Called fresh every tick so it always reflects the latest gameState -
-// once a real shelter/temperature system sets these fields, this function
-// needs no changes at all.
+// getActionCostMultiplier: combines the active shelter/temperature
+// multipliers into one number, applied to every action's base energy
+// cost. Called fresh each time so it always reflects the latest gameState.
 // ----------------------------------------------------------------------
-function getEnergyLossRate() {
-  const shelterMultiplier = SHELTER_ENERGY_MULTIPLIERS[gameState.shelterLevel];
-  const temperatureMultiplier = TEMPERATURE_ENERGY_MULTIPLIERS[gameState.temperature];
-  return ENERGY_LOSS_PER_TICK * shelterMultiplier * temperatureMultiplier;
+function getActionCostMultiplier() {
+  const shelterMultiplier = SHELTER_COST_MULTIPLIERS[gameState.shelterLevel];
+  const temperatureMultiplier = TEMPERATURE_COST_MULTIPLIERS[gameState.temperature];
+  return shelterMultiplier * temperatureMultiplier;
+}
+
+// ----------------------------------------------------------------------
+// spendEnergy: deducts an action's energy cost (after multipliers),
+// floored at 0. Deliberately never blocks the action itself - energy
+// just bottoms out at 0 rather than going negative or requiring the
+// caller to check affordability first. That's what lets the player keep
+// acting (and clawing energy back via eatFood) even at 0 energy, instead
+// of being instantly locked out once they can't "afford" to act.
+// ----------------------------------------------------------------------
+function spendEnergy(baseCost) {
+  const cost = baseCost * getActionCostMultiplier();
+  gameState.energy = Math.max(0, gameState.energy - cost);
 }
 
 // ======================================================================
@@ -187,6 +207,7 @@ function gatherWood() {
 
   gameState.wood += 1;
   gameState.totalWoodGathered += 1;
+  spendEnergy(GATHER_WOOD_ENERGY_COST);
 
   render();
 }
@@ -199,17 +220,19 @@ function gatherFood() {
 
   gameState.food += 1;
   gameState.totalFoodGathered += 1;
+  spendEnergy(GATHER_FOOD_ENERGY_COST);
 
   render();
 }
 
 // ----------------------------------------------------------------------
-// buildSimpleShelter: spends wood to raise shelterLevel to 1 for the
-// CURRENT run only - shelterLevel is part of gameState, not
-// metaProgression, so it resets next cycle and has to be built again.
-// Only usable once the wood-10 milestone has unlocked it. The button
-// itself enforces these same checks (see updateButtonStates), but they're
-// re-checked here too so the function is safe to call from anywhere.
+// buildSimpleShelter: spends wood (and some energy - building takes
+// effort too) to raise shelterLevel to 1 for the CURRENT run only -
+// shelterLevel is part of gameState, not metaProgression, so it resets
+// next cycle and has to be built again. Only usable once the wood-10
+// milestone has unlocked it. The button itself enforces these same
+// checks (see updateButtonStates), but they're re-checked here too so
+// the function is safe to call from anywhere.
 // ----------------------------------------------------------------------
 function buildSimpleShelter() {
   const canAfford = gameState.wood >= SHELTER_BUILD_WOOD_COST;
@@ -219,6 +242,7 @@ function buildSimpleShelter() {
 
   gameState.wood -= SHELTER_BUILD_WOOD_COST;
   gameState.shelterLevel = 1;
+  spendEnergy(SHELTER_BUILD_ENERGY_COST);
 
   render();
 }
@@ -244,22 +268,19 @@ function eatFood() {
 }
 
 // ----------------------------------------------------------------------
-// tickSurvival: runs automatically every TICK_INTERVAL_MS.
-// While the player has energy left, energy drains first. Only once
-// energy has hit 0 does health start draining instead - this is what
-// gives the player a warning period (low/zero energy) before the run
-// actually starts ending, rather than dying the instant food runs out.
+// tickSurvival: runs automatically every TICK_INTERVAL_MS. Energy no
+// longer drains here - it's only ever spent by actions (see spendEnergy).
+// This just drains health once energy has been spent down to 0, and
+// otherwise re-renders so the run-duration display stays live.
 // ----------------------------------------------------------------------
 function tickSurvival() {
-  if (gameState.energy > 0) {
-    gameState.energy = Math.max(0, gameState.energy - getEnergyLossRate());
-  } else {
+  if (gameState.energy <= 0) {
     gameState.health = Math.max(0, gameState.health - HEALTH_LOSS_PER_TICK);
-  }
 
-  if (gameState.health <= 0) {
-    triggerDeath();
-    return;
+    if (gameState.health <= 0) {
+      triggerDeath();
+      return;
+    }
   }
 
   render();
@@ -443,11 +464,18 @@ function render() {
   document.getElementById('wood').textContent = gameState.wood;
   document.getElementById('food').textContent = gameState.food;
 
-  // Energy can hold fractional values internally (shelter/temperature
-  // multipliers rarely divide evenly), so it's shown to two decimal places
-  // instead of being rounded to a whole number - a coarser display made
-  // the loss rate look uneven, holding for a few ticks then jumping,
-  // even though the underlying value was decreasing at a constant rate.
+  // Gather button labels show their current actual energy cost (base
+  // cost x the shelter/temperature multiplier), so it's visible up front
+  // rather than something you only discover from the debug multiplier.
+  const woodCost = (GATHER_WOOD_ENERGY_COST * getActionCostMultiplier()).toFixed(2);
+  const foodCost = (GATHER_FOOD_ENERGY_COST * getActionCostMultiplier()).toFixed(2);
+  document.getElementById('gather-wood-btn').textContent = `Gather Wood (-${woodCost} energy)`;
+  document.getElementById('gather-food-btn').textContent = `Gather Food (-${foodCost} energy)`;
+
+  // Energy can hold fractional values internally (action costs get
+  // multiplied by shelter/temperature, which rarely divides evenly), so
+  // it's shown to two decimal places instead of being rounded to a
+  // whole number, to make each action's actual cost visible.
   document.getElementById('energy-value').textContent = gameState.energy.toFixed(2);
   document.getElementById('health-value').textContent = gameState.health;
 
@@ -462,9 +490,10 @@ function render() {
   document.getElementById('energy-bar').style.width = (gameState.energy / getMaxEnergy() * 100) + '%';
   document.getElementById('health-bar').style.width = (gameState.health / getMaxHealth() * 100) + '%';
 
-  // Debug readout: shows the effective energy loss rate so the
-  // shelter/temperature modifiers are actually visible while testing.
-  document.getElementById('debug-energy-rate').textContent = getEnergyLossRate().toFixed(2);
+  // Debug readout: shows the combined shelter/temperature action-cost
+  // multiplier so those modifiers are actually visible while testing
+  // (e.g. 0.42x means actions cost 42% of their base energy price).
+  document.getElementById('debug-cost-multiplier').textContent = getActionCostMultiplier().toFixed(2) + 'x';
   document.getElementById('debug-temp-toggle').textContent =
     'Temperature: ' + (gameState.temperature === 1 ? 'Comfortable' : 'Cold');
   document.getElementById('debug-shelter-select').value = gameState.shelterLevel;
