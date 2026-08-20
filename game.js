@@ -21,11 +21,10 @@ let metaProgression = {
   // here, that milestone can never fire again, in this cycle or any future one.
   unlockedMilestoneIds: [],
 
-  // Permanent floor on shelter level, raised by certain milestone rewards
-  // (e.g. "you've gathered enough wood to build a shelter"). getEnergyLossRate()
-  // uses max(gameState.shelterLevel, this) so an earned shelter benefit
-  // applies even if the debug shelter dropdown is set lower.
-  baseShelterLevel: 0,
+  // Permanently unlocks the "Build Simple Shelter" action once the wood-10
+  // milestone has been seen. This only reveals the option - the player
+  // still has to spend wood on it fresh every cycle (see buildSimpleShelter).
+  shelterUnlocked: false,
 };
 
 // ----------------------------------------------------------------------
@@ -99,6 +98,10 @@ const EAT_FOOD_ENERGY_RESTORE = 2;
 const SHELTER_ENERGY_MULTIPLIERS = [1.0, 0.6, 0.3]; // [none, simple, good]
 const TEMPERATURE_ENERGY_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortable }
 
+// Cost of the real "Build Simple Shelter" action (as opposed to the
+// debug shelter dropdown), once unlocked via the wood-10 milestone.
+const SHELTER_BUILD_WOOD_COST = 20;
+
 // ----------------------------------------------------------------------
 // getEnergyLossRate: works out how fast energy should currently drain by
 // combining the base rate with the active shelter/temperature multipliers.
@@ -107,10 +110,7 @@ const TEMPERATURE_ENERGY_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortabl
 // needs no changes at all.
 // ----------------------------------------------------------------------
 function getEnergyLossRate() {
-  // Effective shelter is whichever is better: whatever the debug dropdown
-  // is currently set to, or the permanent floor earned from milestones.
-  const effectiveShelterLevel = Math.max(gameState.shelterLevel, metaProgression.baseShelterLevel);
-  const shelterMultiplier = SHELTER_ENERGY_MULTIPLIERS[effectiveShelterLevel];
+  const shelterMultiplier = SHELTER_ENERGY_MULTIPLIERS[gameState.shelterLevel];
   const temperatureMultiplier = TEMPERATURE_ENERGY_MULTIPLIERS[gameState.temperature];
   return ENERGY_LOSS_PER_TICK * shelterMultiplier * temperatureMultiplier;
 }
@@ -127,10 +127,11 @@ const MILESTONES = [
   {
     id: 'wood-10',
     condition: (state) => state.totalWoodGathered >= 10,
-    message: "You've gathered 10 wood - enough to build a simple shelter. " +
-      "This permanently slows your energy drain, from now on and in every future cycle.",
+    message: "You've gathered 10 wood and realize you could build a simple shelter to slow " +
+      "your energy drain. A new action is now available - it'll cost " + SHELTER_BUILD_WOOD_COST +
+      " wood to build, and you'll need to do it again each cycle.",
     reward: () => {
-      metaProgression.baseShelterLevel = Math.max(metaProgression.baseShelterLevel, 1);
+      metaProgression.shelterUnlocked = true;
     },
   },
 ];
@@ -198,6 +199,26 @@ function gatherFood() {
 
   gameState.food += 1;
   gameState.totalFoodGathered += 1;
+
+  render();
+}
+
+// ----------------------------------------------------------------------
+// buildSimpleShelter: spends wood to raise shelterLevel to 1 for the
+// CURRENT run only - shelterLevel is part of gameState, not
+// metaProgression, so it resets next cycle and has to be built again.
+// Only usable once the wood-10 milestone has unlocked it. The button
+// itself enforces these same checks (see updateButtonStates), but they're
+// re-checked here too so the function is safe to call from anywhere.
+// ----------------------------------------------------------------------
+function buildSimpleShelter() {
+  const canAfford = gameState.wood >= SHELTER_BUILD_WOOD_COST;
+  const alreadyBuilt = gameState.shelterLevel >= 1;
+
+  if (gameState.isDead || !metaProgression.shelterUnlocked || !canAfford || alreadyBuilt) return;
+
+  gameState.wood -= SHELTER_BUILD_WOOD_COST;
+  gameState.shelterLevel = 1;
 
   render();
 }
@@ -355,16 +376,23 @@ function updateButtonStates() {
   const gatherWoodBtn = document.getElementById('gather-wood-btn');
   const gatherFoodBtn = document.getElementById('gather-food-btn');
   const eatFoodBtn = document.getElementById('eat-food-btn');
+  const buildShelterBtn = document.getElementById('build-shelter-btn');
   const pauseBtn = document.getElementById('pause-btn');
   const shelterSelect = document.getElementById('debug-shelter-select');
   const tempToggleBtn = document.getElementById('debug-temp-toggle');
   const killBtn = document.getElementById('debug-kill-btn');
+
+  // The shelter-building button only exists in the UI at all once its
+  // milestone has been seen - this is independent of dead/paused, so it's
+  // handled before either of those branches.
+  buildShelterBtn.classList.toggle('hidden', !metaProgression.shelterUnlocked);
 
   // Once dead, every action button is disabled - the run is over.
   if (gameState.isDead) {
     gatherWoodBtn.disabled = true;
     gatherFoodBtn.disabled = true;
     eatFoodBtn.disabled = true;
+    buildShelterBtn.disabled = true;
     pauseBtn.disabled = true;
     shelterSelect.disabled = true;
     tempToggleBtn.disabled = true;
@@ -378,6 +406,7 @@ function updateButtonStates() {
     gatherWoodBtn.disabled = true;
     gatherFoodBtn.disabled = true;
     eatFoodBtn.disabled = true;
+    buildShelterBtn.disabled = true;
     pauseBtn.disabled = true;
     shelterSelect.disabled = true;
     tempToggleBtn.disabled = true;
@@ -391,6 +420,12 @@ function updateButtonStates() {
   shelterSelect.disabled = false;
   tempToggleBtn.disabled = false;
   killBtn.disabled = false;
+
+  // Building is only allowed if the player can afford it AND hasn't
+  // already built one this run (shelterLevel resets to 0 next cycle).
+  const canAffordShelter = gameState.wood >= SHELTER_BUILD_WOOD_COST;
+  const alreadyBuilt = gameState.shelterLevel >= 1;
+  buildShelterBtn.disabled = !canAffordShelter || alreadyBuilt;
 
   // Eating is only allowed if the player can afford it AND actually
   // needs it (no point enabling the button if energy is already full).
@@ -409,11 +444,11 @@ function render() {
   document.getElementById('food').textContent = gameState.food;
 
   // Energy can hold fractional values internally (shelter/temperature
-  // multipliers rarely divide evenly), so it's shown to one decimal place
-  // instead of being rounded to a whole number - a whole-number display
-  // made the loss rate look uneven, holding for 3 ticks then 4 ticks etc.,
+  // multipliers rarely divide evenly), so it's shown to two decimal places
+  // instead of being rounded to a whole number - a coarser display made
+  // the loss rate look uneven, holding for a few ticks then jumping,
   // even though the underlying value was decreasing at a constant rate.
-  document.getElementById('energy-value').textContent = gameState.energy.toFixed(1);
+  document.getElementById('energy-value').textContent = gameState.energy.toFixed(2);
   document.getElementById('health-value').textContent = gameState.health;
 
   // The "/ max" labels are driven from getMaxEnergy()/getMaxHealth() too,
@@ -509,7 +544,7 @@ function resetProgression() {
     bonusEnergy: 0,
     cycleCount: 1,
     unlockedMilestoneIds: [],
-    baseShelterLevel: 0,
+    shelterUnlocked: false,
   };
 
   startNewRun();
@@ -534,6 +569,7 @@ function init() {
   document.getElementById('gather-wood-btn').addEventListener('click', gatherWood);
   document.getElementById('gather-food-btn').addEventListener('click', gatherFood);
   document.getElementById('eat-food-btn').addEventListener('click', eatFood);
+  document.getElementById('build-shelter-btn').addEventListener('click', buildSimpleShelter);
   document.getElementById('pause-btn').addEventListener('click', pauseGame);
   document.getElementById('resume-btn').addEventListener('click', resumeGame);
   document.getElementById('milestone-continue-btn').addEventListener('click', resumeGame);

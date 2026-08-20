@@ -139,14 +139,17 @@ select:disabled {
   justify-content: center;
 }
 
-/* Toggled on/off from game.js instead of using inline styles */
-.overlay.hidden {
-  display: none;
-}
-
 .overlay-content {
   background-color: white;
   border-radius: 8px;
   padding: 24px 32px;
   text-align: center;
+}
+
+/* Generic visibility utility, toggled via classList from game.js - e.g.
+   the shelter-building button before its milestone is unlocked, or the
+   overlays above. Defined last so its display:none always wins over an
+   earlier same-specificity rule like .overlay's display:flex. */
+.hidden {
+  display: none;
 }

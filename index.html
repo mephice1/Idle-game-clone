@@ -39,7 +39,9 @@
         <button id="gather-wood-btn">Gather Wood</button>
         <button id="gather-food-btn">Gather Food</button>
         <button id="eat-food-btn">Eat Food (-5 food)</button>
-        <button id="pause-btn">Pause</button>
+        <!-- Hidden until the wood-10 milestone unlocks it - see MILESTONES in game.js -->
+        <button id="build-shelter-btn" class="hidden">Build Simple Shelter (20 wood)</button>
+        
       </section>
 
       <!-- Temporary debug controls for testing energy modifiers, until real
@@ -62,6 +64,7 @@
     <!-- Meta-progression sidepanel: persists across death cycles, unlike
          everything in .main-panel which resets each time you die. -->
     <aside id="meta-panel" class="side-panel">
+      <button id="pause-btn">Pause</button>
       <h2>Progress</h2>
       <p>Cycle: <span id="cycle-count">1</span></p>
       <p>Bonus Health: <span id="bonus-health">0</span></p>
