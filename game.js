@@ -330,10 +330,12 @@ function render() {
   document.getElementById('wood').textContent = gameState.wood;
   document.getElementById('food').textContent = gameState.food;
 
-  // Hunger can now hold fractional values internally (shelter/temperature
-  // multipliers rarely divide evenly), so it's rounded just for display.
-  const roundedHunger = Math.round(gameState.hunger);
-  document.getElementById('hunger-value').textContent = roundedHunger;
+  // Hunger can hold fractional values internally (shelter/temperature
+  // multipliers rarely divide evenly), so it's shown to one decimal place
+  // instead of being rounded to a whole number - a whole-number display
+  // made the loss rate look uneven, holding for 3 ticks then 4 ticks etc.,
+  // even though the underlying value was decreasing at a constant rate.
+  document.getElementById('hunger-value').textContent = gameState.hunger.toFixed(1);
   document.getElementById('health-value').textContent = gameState.health;
 
   // The "/ max" labels are driven from getMaxHunger()/getMaxHealth() too,
