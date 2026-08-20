@@ -18,13 +18,13 @@
         <p>Food: <span id="food">0</span></p>
       </section>
 
-      <!-- Survival stats: hunger and health, shown as a number plus a bar -->
+      <!-- Survival stats: energy and health, shown as a number plus a bar -->
       <section id="survival-stats">
         <h2>Survival</h2>
 
-        <p>Hunger: <span id="hunger-value">0</span> / <span id="hunger-max">0</span></p>
+        <p>Energy: <span id="energy-value">0</span> / <span id="energy-max">0</span></p>
         <div class="bar-outer">
-          <div id="hunger-bar" class="bar-fill hunger-fill"></div>
+          <div id="energy-bar" class="bar-fill energy-fill"></div>
         </div>
 
         <p>Health: <span id="health-value">0</span> / <span id="health-max">0</span></p>
@@ -42,10 +42,10 @@
         <button id="pause-btn">Pause</button>
       </section>
 
-      <!-- Temporary debug controls for testing hunger modifiers, until real
+      <!-- Temporary debug controls for testing energy modifiers, until real
            shelter-building and temperature systems exist to drive these. -->
       <section id="debug">
-        <h2>Debug (temporary - for testing hunger modifiers)</h2>
+        <h2>Debug (temporary - for testing energy modifiers)</h2>
         <label>Shelter:
           <select id="debug-shelter-select">
             <option value="0">0 - None</option>
@@ -54,7 +54,7 @@
           </select>
         </label>
         <button id="debug-temp-toggle">Temperature: Comfortable</button>
-        <p>Hunger loss rate: <span id="debug-hunger-rate">1.00</span> / sec</p>
+        <p>Energy loss rate: <span id="debug-energy-rate">1.00</span> / sec</p>
         <button id="debug-kill-btn" class="danger-btn">Kill Instantly (test cycle)</button>
       </section>
     </main>
@@ -65,7 +65,7 @@
       <h2>Progress</h2>
       <p>Cycle: <span id="cycle-count">1</span></p>
       <p>Bonus Health: <span id="bonus-health">0</span></p>
-      <p>Bonus Hunger: <span id="bonus-hunger">0</span></p>
+      <p>Bonus Energy: <span id="bonus-energy">0</span></p>
       <p>Current cycle duration: <span id="run-duration">0</span>s</p>
     </aside>
   </div>
@@ -82,7 +82,7 @@
 
       <p>Choose a permanent bonus for your next cycle:</p>
       <button id="bonus-health-btn">+1 Max Health</button>
-      <button id="bonus-hunger-btn">+1 Max Hunger</button>
+      <button id="bonus-energy-btn">+1 Max Energy</button>
 
       <p class="danger-zone">
         <button id="reset-progression-death-btn" class="danger-btn">Reset All Progression</button>

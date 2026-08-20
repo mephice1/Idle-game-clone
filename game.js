@@ -1,7 +1,7 @@
 // Base max values before any meta-progression bonuses are applied.
-// See getMaxHunger()/getMaxHealth() below for the values actually used
+// See getMaxEnergy()/getMaxHealth() below for the values actually used
 // in gameplay.
-const BASE_MAX_HUNGER = 10;
+const BASE_MAX_ENERGY = 10;
 const BASE_MAX_HEALTH = 10;
 
 // ======================================================================
@@ -13,18 +13,18 @@ const BASE_MAX_HEALTH = 10;
 // ======================================================================
 let metaProgression = {
   bonusHealth: 0,
-  bonusHunger: 0,
+  bonusEnergy: 0,
   cycleCount: 1,
 };
 
 // ----------------------------------------------------------------------
-// getMaxHunger / getMaxHealth: the actual caps used during gameplay -
+// getMaxEnergy / getMaxHealth: the actual caps used during gameplay -
 // the base value plus whatever permanent bonuses have been earned by
 // surviving previous cycles. Called wherever a max value is needed so
 // they always reflect the latest metaProgression.
 // ----------------------------------------------------------------------
-function getMaxHunger() {
-  return BASE_MAX_HUNGER + metaProgression.bonusHunger;
+function getMaxEnergy() {
+  return BASE_MAX_ENERGY + metaProgression.bonusEnergy;
 }
 
 function getMaxHealth() {
@@ -41,7 +41,7 @@ let gameState = {
   food: 0,
 
   // Survival stats. Both start full and are clamped between 0 and their maximum values.
-  hunger: getMaxHunger(),
+  energy: getMaxEnergy(),
   health: getMaxHealth(),
 
   // Lifetime counters for the death screen summary. These only ever go
@@ -67,7 +67,7 @@ let gameState = {
   totalPausedMs: 0,
 };
 
-// The interval timer for hunger/health decay lives outside gameState
+// The interval timer for energy/health decay lives outside gameState
 // because it's not "game data" - it's a handle we need to be able to
 // cancel with clearInterval(). Storing it in gameState would just mean
 // accidentally saving/serializing something that isn't real state.
@@ -75,30 +75,30 @@ let survivalTimerId = null;
 
 // How often (ms) the survival tick runs, and how much it moves each stat.
 const TICK_INTERVAL_MS = 1000;
-const HUNGER_LOSS_PER_TICK = 0.2;
+const ENERGY_LOSS_PER_TICK = 0.2;
 const HEALTH_LOSS_PER_TICK = 1;
 
 // Cost/benefit of eating food.
 const EAT_FOOD_COST = 5;
-const EAT_FOOD_HUNGER_RESTORE = 2;
+const EAT_FOOD_ENERGY_RESTORE = 2;
 
-// Multipliers applied to HUNGER_LOSS_PER_TICK based on the player's
-// current shelter and temperature. Below 1.0 = slower hunger loss,
+// Multipliers applied to ENERGY_LOSS_PER_TICK based on the player's
+// current shelter and temperature. Below 1.0 = slower energy loss,
 // above 1.0 = faster. Indexed/keyed by the matching gameState value.
-const SHELTER_HUNGER_MULTIPLIERS = [1.0, 0.6, 0.3]; // [none, simple, good]
-const TEMPERATURE_HUNGER_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortable }
+const SHELTER_ENERGY_MULTIPLIERS = [1.0, 0.6, 0.3]; // [none, simple, good]
+const TEMPERATURE_ENERGY_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortable }
 
 // ----------------------------------------------------------------------
-// getHungerLossRate: works out how fast hunger should currently drain by
+// getEnergyLossRate: works out how fast energy should currently drain by
 // combining the base rate with the active shelter/temperature multipliers.
 // Called fresh every tick so it always reflects the latest gameState -
 // once a real shelter/temperature system sets these fields, this function
 // needs no changes at all.
 // ----------------------------------------------------------------------
-function getHungerLossRate() {
-  const shelterMultiplier = SHELTER_HUNGER_MULTIPLIERS[gameState.shelterLevel];
-  const temperatureMultiplier = TEMPERATURE_HUNGER_MULTIPLIERS[gameState.temperature];
-  return HUNGER_LOSS_PER_TICK * shelterMultiplier * temperatureMultiplier;
+function getEnergyLossRate() {
+  const shelterMultiplier = SHELTER_ENERGY_MULTIPLIERS[gameState.shelterLevel];
+  const temperatureMultiplier = TEMPERATURE_ENERGY_MULTIPLIERS[gameState.temperature];
+  return ENERGY_LOSS_PER_TICK * shelterMultiplier * temperatureMultiplier;
 }
 
 // ----------------------------------------------------------------------
@@ -128,35 +128,35 @@ function gatherFood() {
 }
 
 // ----------------------------------------------------------------------
-// eatFood: spends food to restore hunger.
+// eatFood: spends food to restore energy.
 // The button itself gets disabled when this isn't a legal move (see
 // updateButtonStates), but we re-check the conditions here too so the
 // function is safe to call from anywhere, not just a click handler.
 // ----------------------------------------------------------------------
 function eatFood() {
   const canAfford = gameState.food >= EAT_FOOD_COST;
-  const needsHunger = gameState.hunger < getMaxHunger();
+  const needsEnergy = gameState.energy < getMaxEnergy();
 
-  if (gameState.isDead || !canAfford || !needsHunger) return;
+  if (gameState.isDead || !canAfford || !needsEnergy) return;
 
   gameState.food -= EAT_FOOD_COST;
 
-  // Math.min caps hunger at its max even if the restore amount would push it over.
-  gameState.hunger = Math.min(getMaxHunger(), gameState.hunger + EAT_FOOD_HUNGER_RESTORE);
+  // Math.min caps energy at its max even if the restore amount would push it over.
+  gameState.energy = Math.min(getMaxEnergy(), gameState.energy + EAT_FOOD_ENERGY_RESTORE);
 
   render();
 }
 
 // ----------------------------------------------------------------------
 // tickSurvival: runs automatically every TICK_INTERVAL_MS.
-// While the player has hunger left, hunger drains first. Only once
-// hunger has hit 0 does health start draining instead - this is what
-// gives the player a warning period (low/zero hunger) before the run
+// While the player has energy left, energy drains first. Only once
+// energy has hit 0 does health start draining instead - this is what
+// gives the player a warning period (low/zero energy) before the run
 // actually starts ending, rather than dying the instant food runs out.
 // ----------------------------------------------------------------------
 function tickSurvival() {
-  if (gameState.hunger > 0) {
-    gameState.hunger = Math.max(0, gameState.hunger - getHungerLossRate());
+  if (gameState.energy > 0) {
+    gameState.energy = Math.max(0, gameState.energy - getEnergyLossRate());
   } else {
     gameState.health = Math.max(0, gameState.health - HEALTH_LOSS_PER_TICK);
   }
@@ -187,14 +187,14 @@ function triggerDeath() {
 
 // ----------------------------------------------------------------------
 // debugKillInstantly: testing shortcut for the death/cycle flow without
-// waiting for hunger and health to actually drain out. No-op if already
+// waiting for energy and health to actually drain out. No-op if already
 // dead or paused (same guard triggerDeath itself doesn't need, since it
-// only ever gets called once hunger/health naturally reach 0).
+// only ever gets called once energy/health naturally reach 0).
 // ----------------------------------------------------------------------
 function debugKillInstantly() {
   if (gameState.isDead || gameState.isPaused) return;
 
-  gameState.hunger = 0;
+  gameState.energy = 0;
   gameState.health = 0;
 
   triggerDeath();
@@ -315,10 +315,10 @@ function updateButtonStates() {
   killBtn.disabled = false;
 
   // Eating is only allowed if the player can afford it AND actually
-  // needs it (no point enabling the button if hunger is already full).
+  // needs it (no point enabling the button if energy is already full).
   const canAfford = gameState.food >= EAT_FOOD_COST;
-  const needsHunger = gameState.hunger < getMaxHunger();
-  eatFoodBtn.disabled = !(canAfford && needsHunger);
+  const needsEnergy = gameState.energy < getMaxEnergy();
+  eatFoodBtn.disabled = !(canAfford && needsEnergy);
 }
 
 // ----------------------------------------------------------------------
@@ -330,28 +330,28 @@ function render() {
   document.getElementById('wood').textContent = gameState.wood;
   document.getElementById('food').textContent = gameState.food;
 
-  // Hunger can hold fractional values internally (shelter/temperature
+  // Energy can hold fractional values internally (shelter/temperature
   // multipliers rarely divide evenly), so it's shown to one decimal place
   // instead of being rounded to a whole number - a whole-number display
   // made the loss rate look uneven, holding for 3 ticks then 4 ticks etc.,
   // even though the underlying value was decreasing at a constant rate.
-  document.getElementById('hunger-value').textContent = gameState.hunger.toFixed(1);
+  document.getElementById('energy-value').textContent = gameState.energy.toFixed(1);
   document.getElementById('health-value').textContent = gameState.health;
 
-  // The "/ max" labels are driven from getMaxHunger()/getMaxHealth() too,
+  // The "/ max" labels are driven from getMaxEnergy()/getMaxHealth() too,
   // so they automatically reflect any meta-progression bonuses instead
   // of a hardcoded number that could drift out of sync.
-  document.getElementById('hunger-max').textContent = getMaxHunger();
+  document.getElementById('energy-max').textContent = getMaxEnergy();
   document.getElementById('health-max').textContent = getMaxHealth();
 
   // Bars are just divs whose width is set to match the stat's percentage
   // of its max value.
-  document.getElementById('hunger-bar').style.width = (gameState.hunger / getMaxHunger() * 100) + '%';
+  document.getElementById('energy-bar').style.width = (gameState.energy / getMaxEnergy() * 100) + '%';
   document.getElementById('health-bar').style.width = (gameState.health / getMaxHealth() * 100) + '%';
 
-  // Debug readout: shows the effective hunger loss rate so the
+  // Debug readout: shows the effective energy loss rate so the
   // shelter/temperature modifiers are actually visible while testing.
-  document.getElementById('debug-hunger-rate').textContent = getHungerLossRate().toFixed(2);
+  document.getElementById('debug-energy-rate').textContent = getEnergyLossRate().toFixed(2);
   document.getElementById('debug-temp-toggle').textContent =
     'Temperature: ' + (gameState.temperature === 1 ? 'Comfortable' : 'Cold');
   document.getElementById('debug-shelter-select').value = gameState.shelterLevel;
@@ -360,7 +360,7 @@ function render() {
   // render() already runs every tick - no separate timer needed.
   document.getElementById('cycle-count').textContent = metaProgression.cycleCount;
   document.getElementById('bonus-health').textContent = metaProgression.bonusHealth;
-  document.getElementById('bonus-hunger').textContent = metaProgression.bonusHunger;
+  document.getElementById('bonus-energy').textContent = metaProgression.bonusEnergy;
   document.getElementById('run-duration').textContent = getRunDurationSeconds();
 
   updateButtonStates();
@@ -369,15 +369,15 @@ function render() {
 // ----------------------------------------------------------------------
 // startNewRun: resets gameState back to fresh starting values for a new
 // cycle, hides both overlays, and restarts the survival timer. Note
-// this does NOT touch metaProgression - hunger/health start at whatever
-// getMaxHunger()/getMaxHealth() currently are, which already include
+// this does NOT touch metaProgression - energy/health start at whatever
+// getMaxEnergy()/getMaxHealth() currently are, which already include
 // any bonuses earned from previous cycles.
 // ----------------------------------------------------------------------
 function startNewRun() {
   gameState = {
     wood: 0,
     food: 0,
-    hunger: getMaxHunger(),
+    energy: getMaxEnergy(),
     health: getMaxHealth(),
     totalWoodGathered: 0,
     totalFoodGathered: 0,
@@ -406,8 +406,8 @@ function startNewRun() {
 function chooseBonus(stat) {
   if (stat === 'health') {
     metaProgression.bonusHealth += 1;
-  } else if (stat === 'hunger') {
-    metaProgression.bonusHunger += 1;
+  } else if (stat === 'energy') {
+    metaProgression.bonusEnergy += 1;
   }
 
   metaProgression.cycleCount += 1;
@@ -423,7 +423,7 @@ function chooseBonus(stat) {
 function resetProgression() {
   metaProgression = {
     bonusHealth: 0,
-    bonusHunger: 0,
+    bonusEnergy: 0,
     cycleCount: 1,
   };
 
@@ -431,7 +431,7 @@ function resetProgression() {
 }
 
 // ----------------------------------------------------------------------
-// startSurvivalTimer: begins the repeating hunger/health tick. Guards
+// startSurvivalTimer: begins the repeating energy/health tick. Guards
 // against starting a second interval on top of an existing one.
 // ----------------------------------------------------------------------
 function startSurvivalTimer() {
@@ -454,7 +454,7 @@ function init() {
 
   // Death screen: pick a permanent bonus and move on to the next cycle.
   document.getElementById('bonus-health-btn').addEventListener('click', () => chooseBonus('health'));
-  document.getElementById('bonus-hunger-btn').addEventListener('click', () => chooseBonus('hunger'));
+  document.getElementById('bonus-energy-btn').addEventListener('click', () => chooseBonus('energy'));
 
   // Both overlays offer a way to wipe meta-progression and start over.
   document.getElementById('reset-progression-death-btn').addEventListener('click', resetProgression);

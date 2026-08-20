@@ -99,7 +99,7 @@ select:disabled {
   background-color: #822f2f;
 }
 
-/* ---------- Hunger / health bars ---------- */
+/* ---------- Energy / health bars ---------- */
 
 .bar-outer {
   width: 100%;
@@ -116,7 +116,7 @@ select:disabled {
   transition: width 0.2s ease-out;
 }
 
-.hunger-fill {
+.energy-fill {
   background-color: #d9a441;
 }
 
