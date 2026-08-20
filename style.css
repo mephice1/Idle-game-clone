@@ -81,6 +81,13 @@ select:disabled {
   background-color: #eee;
   cursor: not-allowed;
 }
+/* The pause button is visually separated from the other buttons, since it
+   is a toggle rather than a one-off action. */
+#pause-btn {
+  display: block;
+  margin-left: auto;
+}
+
 
 /* Reset-progression buttons are visually separated as a "danger zone" -
    a distinct color and a border above set them apart from the normal
