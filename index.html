@@ -103,6 +103,17 @@
     </div>
   </div>
 
+  <!-- Milestone popup: hidden until a one-time milestone event fires
+       (see MILESTONES in game.js). No "Reset Progression" option here -
+       just the message and a single way forward. -->
+  <div id="milestone-screen" class="overlay hidden">
+    <div class="overlay-content">
+      <h2>Milestone Reached!</h2>
+      <p id="milestone-message"></p>
+      <button id="milestone-continue-btn">Continue</button>
+    </div>
+  </div>
+
   <script src="game.js"></script>
 </body>
 </html>

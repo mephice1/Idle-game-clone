@@ -15,6 +15,17 @@ let metaProgression = {
   bonusHealth: 0,
   bonusEnergy: 0,
   cycleCount: 1,
+
+  // Ids of one-time milestone events already triggered, ever - see the
+  // MILESTONES list and checkMilestones() further down. Once an id is in
+  // here, that milestone can never fire again, in this cycle or any future one.
+  unlockedMilestoneIds: [],
+
+  // Permanent floor on shelter level, raised by certain milestone rewards
+  // (e.g. "you've gathered enough wood to build a shelter"). getEnergyLossRate()
+  // uses max(gameState.shelterLevel, this) so an earned shelter benefit
+  // applies even if the debug shelter dropdown is set lower.
+  baseShelterLevel: 0,
 };
 
 // ----------------------------------------------------------------------
@@ -96,9 +107,73 @@ const TEMPERATURE_ENERGY_MULTIPLIERS = { 0: 1.4, 1: 1.0 }; // { cold, comfortabl
 // needs no changes at all.
 // ----------------------------------------------------------------------
 function getEnergyLossRate() {
-  const shelterMultiplier = SHELTER_ENERGY_MULTIPLIERS[gameState.shelterLevel];
+  // Effective shelter is whichever is better: whatever the debug dropdown
+  // is currently set to, or the permanent floor earned from milestones.
+  const effectiveShelterLevel = Math.max(gameState.shelterLevel, metaProgression.baseShelterLevel);
+  const shelterMultiplier = SHELTER_ENERGY_MULTIPLIERS[effectiveShelterLevel];
   const temperatureMultiplier = TEMPERATURE_ENERGY_MULTIPLIERS[gameState.temperature];
   return ENERGY_LOSS_PER_TICK * shelterMultiplier * temperatureMultiplier;
+}
+
+// ======================================================================
+// MILESTONES: one-time events that can fire during a run when their
+// condition becomes true. Each fires at most once ever (tracked in
+// metaProgression.unlockedMilestoneIds, which survives cycles), applies
+// its reward permanently, and pauses the game with an explanatory
+// message until the player clicks Continue. Add more entries here to
+// add more milestones - checkMilestones() handles the rest generically.
+// ======================================================================
+const MILESTONES = [
+  {
+    id: 'wood-10',
+    condition: (state) => state.totalWoodGathered >= 10,
+    message: "You've gathered 10 wood - enough to build a simple shelter. " +
+      "This permanently slows your energy drain, from now on and in every future cycle.",
+    reward: () => {
+      metaProgression.baseShelterLevel = Math.max(metaProgression.baseShelterLevel, 1);
+    },
+  },
+];
+
+// ----------------------------------------------------------------------
+// checkMilestones: looks for any not-yet-unlocked milestone whose
+// condition is now true. Only checks while the game is actually running
+// (not dead, not already paused/showing a popup) so it can't fire twice
+// or interrupt the death/pause flow. Called from render(), which already
+// runs after every state-changing action.
+// ----------------------------------------------------------------------
+function checkMilestones() {
+  if (gameState.isDead || gameState.isPaused) return;
+
+  for (const milestone of MILESTONES) {
+    const alreadyUnlocked = metaProgression.unlockedMilestoneIds.includes(milestone.id);
+    if (!alreadyUnlocked && milestone.condition(gameState)) {
+      triggerMilestone(milestone);
+      return; // one popup at a time - any others wait for the next check
+    }
+  }
+}
+
+// ----------------------------------------------------------------------
+// triggerMilestone: marks the milestone as permanently unlocked, applies
+// its reward, then pauses the game (reusing the same isPaused mechanism
+// as pauseGame - stops the tick, freezes run duration) and shows the
+// milestone popup instead of the plain pause popup.
+// ----------------------------------------------------------------------
+function triggerMilestone(milestone) {
+  metaProgression.unlockedMilestoneIds.push(milestone.id);
+  milestone.reward();
+
+  gameState.isPaused = true;
+  gameState.pauseStartTime = Date.now();
+
+  clearInterval(survivalTimerId);
+  survivalTimerId = null;
+
+  updateButtonStates();
+
+  document.getElementById('milestone-message').textContent = milestone.message;
+  document.getElementById('milestone-screen').classList.remove('hidden');
 }
 
 // ----------------------------------------------------------------------
@@ -218,9 +293,11 @@ function pauseGame() {
 }
 
 // ----------------------------------------------------------------------
-// resumeGame: the reverse of pauseGame. Adds however long this pause
-// lasted onto the running total (so it can be excluded from run
-// duration elsewhere), then restarts the tick.
+// resumeGame: the reverse of pauseGame/triggerMilestone. Adds however
+// long this pause lasted onto the running total (so it can be excluded
+// from run duration elsewhere), then restarts the tick. Hides both
+// overlays that could have caused the pause - only one is ever actually
+// visible, so hiding the other is harmless.
 // ----------------------------------------------------------------------
 function resumeGame() {
   if (!gameState.isPaused) return;
@@ -230,6 +307,7 @@ function resumeGame() {
   gameState.isPaused = false;
 
   document.getElementById('pause-screen').classList.add('hidden');
+  document.getElementById('milestone-screen').classList.add('hidden');
 
   updateButtonStates();
   startSurvivalTimer();
@@ -364,6 +442,10 @@ function render() {
   document.getElementById('run-duration').textContent = getRunDurationSeconds();
 
   updateButtonStates();
+
+  // Checked last so it sees this render's up-to-date gameState. If it
+  // fires, it pauses the game and calls updateButtonStates() itself.
+  checkMilestones();
 }
 
 // ----------------------------------------------------------------------
@@ -392,6 +474,7 @@ function startNewRun() {
 
   document.getElementById('death-screen').classList.add('hidden');
   document.getElementById('pause-screen').classList.add('hidden');
+  document.getElementById('milestone-screen').classList.add('hidden');
 
   render();
   startSurvivalTimer();
@@ -425,6 +508,8 @@ function resetProgression() {
     bonusHealth: 0,
     bonusEnergy: 0,
     cycleCount: 1,
+    unlockedMilestoneIds: [],
+    baseShelterLevel: 0,
   };
 
   startNewRun();
@@ -451,6 +536,7 @@ function init() {
   document.getElementById('eat-food-btn').addEventListener('click', eatFood);
   document.getElementById('pause-btn').addEventListener('click', pauseGame);
   document.getElementById('resume-btn').addEventListener('click', resumeGame);
+  document.getElementById('milestone-continue-btn').addEventListener('click', resumeGame);
 
   // Death screen: pick a permanent bonus and move on to the next cycle.
   document.getElementById('bonus-health-btn').addEventListener('click', () => chooseBonus('health'));
