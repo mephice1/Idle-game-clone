@@ -2,6 +2,9 @@
 // else, so changing the scale only ever means changing this one line.
 const MAX_HUNGER = 10;
 
+// Same idea for health's max value.
+const MAX_HEALTH = 10;
+
 // ======================================================================
 // gameState holds every piece of data that describes the current run.
 // Keeping it all in one object makes it easy to reset everything at once
@@ -13,7 +16,7 @@ let gameState = {
 
   // Survival stats. Both start full and are clamped between 0 and their maximum values.
   hunger: MAX_HUNGER,
-  health: 100,
+  health: MAX_HEALTH,
 
   // Lifetime counters for the death screen summary. These only ever go
   // UP, even though "wood" and "food" above go down as they're spent.
@@ -29,7 +32,7 @@ let gameState = {
   // Modifiers that will eventually be set by real shelter/temperature
   // systems. For now they're driven by the debug controls further down.
   shelterLevel: 0,  // 0 = none, 1 = simple, 2 = good
-  temperature: 1,   // 0 = cold, 1 = comfortable
+  temperature: 0,   // 0 = cold, 1 = comfortable
 
   // Pause state. pauseStartTime/totalPausedMs let the run duration shown
   // on the pause/death screens exclude time spent paused.
@@ -288,10 +291,16 @@ function render() {
   document.getElementById('hunger-value').textContent = roundedHunger;
   document.getElementById('health-value').textContent = gameState.health;
 
+  // The "/ max" labels are driven from the constants too, so they can
+  // never drift out of sync with MAX_HUNGER/MAX_HEALTH like a hardcoded
+  // number in the HTML could.
+  document.getElementById('hunger-max').textContent = MAX_HUNGER;
+  document.getElementById('health-max').textContent = MAX_HEALTH;
+
   // Bars are just divs whose width is set to match the stat's percentage
   // of its max value.
   document.getElementById('hunger-bar').style.width = (gameState.hunger / MAX_HUNGER * 100) + '%';
-  document.getElementById('health-bar').style.width = gameState.health + '%';
+  document.getElementById('health-bar').style.width = (gameState.health / MAX_HEALTH * 100) + '%';
 
   // Debug readout: shows the effective hunger loss rate so the
   // shelter/temperature modifiers are actually visible while testing.
@@ -313,13 +322,13 @@ function startNewRun() {
     wood: 0,
     food: 0,
     hunger: MAX_HUNGER,
-    health: 100,
+    health: MAX_HEALTH,
     totalWoodGathered: 0,
     totalFoodGathered: 0,
     runStartTime: Date.now(),
     isDead: false,
     shelterLevel: 0,
-    temperature: 1,
+    temperature: 0,
     isPaused: false,
     pauseStartTime: null,
     totalPausedMs: 0,
