@@ -97,8 +97,8 @@ const EAT_FOOD_ENERGY_RESTORE = 2;
 // Base energy cost of gathering/building actions, before shelter/temperature
 // multipliers. Eating is deliberately the one exception - it's the
 // player's way back up, so it only ever restores energy, never costs it.
-const GATHER_WOOD_ENERGY_COST = 0.3;
-const GATHER_FOOD_ENERGY_COST = 0.2;
+const GATHER_WOOD_ENERGY_COST = 1;
+const GATHER_FOOD_ENERGY_COST = 1;
 const SHELTER_BUILD_ENERGY_COST = 1;
 
 // Multipliers applied to action energy costs based on the player's
